@@ -88,7 +88,7 @@ resource "aws_security_group" "web_server" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["105.119.31.215/32"]  # Restrict this to my IP for security
+    cidr_blocks = ["0.0.0.0/0"]  
   }
 
   egress {
