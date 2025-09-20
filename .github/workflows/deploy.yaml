@@ -19,11 +19,12 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+          # Add SSH host to known_hosts to avoid host verification
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Test SSH Connection
         run: |
-          ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} 'echo "SSH connection successful"'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@${{ secrets.EC2_HOST }} 'echo "SSH connection successful"'
 
       - name: Deploy Website
         run: |
