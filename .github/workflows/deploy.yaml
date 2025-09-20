@@ -28,8 +28,13 @@ jobs:
 
       - name: Deploy Website
         run: |
-          # Create a temporary directory for deployment
-          ssh ubuntu@${{ secrets.EC2_HOST }} 'sudo mkdir -p /tmp/website-deploy'
+          # Create a temporary directory for deployment with proper permissions
+          ssh ubuntu@${{ secrets.EC2_HOST }} '
+            sudo rm -rf /tmp/website-deploy
+            sudo mkdir -p /tmp/website-deploy
+            sudo chown ubuntu:ubuntu /tmp/website-deploy
+            sudo chmod 755 /tmp/website-deploy
+          '
 
           # Copy all files from website folder to server
           scp -o StrictHostKeyChecking=no -r website/* ubuntu@${{ secrets.EC2_HOST }}:/tmp/website-deploy/
