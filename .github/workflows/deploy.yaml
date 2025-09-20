@@ -1,0 +1,66 @@
+name: Deploy Website to EC2
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Test SSH Connection
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_HOST }} 'echo "SSH connection successful"'
+
+      - name: Deploy Website
+        run: |
+          # Create a temporary directory for deployment
+          ssh ubuntu@${{ secrets.EC2_HOST }} 'sudo mkdir -p /tmp/website-deploy'
+
+          # Copy all files from website folder to server
+          scp -o StrictHostKeyChecking=no -r website/* ubuntu@${{ secrets.EC2_HOST }}:/tmp/website-deploy/
+
+          # Deploy files and restart nginx
+          ssh ubuntu@${{ secrets.EC2_HOST }} '
+            sudo rm -rf /var/www/html/website/*
+            sudo cp -r /tmp/website-deploy/* /var/www/html/website/
+            sudo chown -R www-data:www-data /var/www/html/website
+            sudo chmod -R 755 /var/www/html/website
+            sudo systemctl reload nginx
+            sudo rm -rf /tmp/website-deploy
+            echo "Deployment completed successfully"
+          '
+
+      - name: Verify Deployment
+        run: |
+          sleep 5
+          curl -f http://${{ secrets.EC2_HOST }} || exit 1
+          echo "Website is accessible and deployment verified"
+
+  notify:
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Notify Deployment Status
+        run: |
+          if [ "${{ needs.deploy.result }}" == "success" ]; then
+            echo "✅ Deployment successful!"
+          else
+            echo "❌ Deployment failed!"
+            exit 1
+          fi

@@ -46,6 +46,4 @@ logs/
 temp/
 tmp/
 
-# GitHub Actions (usually committed, but exclude if sensitive)
-.github/workflows/
 /key

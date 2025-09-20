@@ -18,7 +18,7 @@ data "aws_ami" "ubuntu" {
 
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-22.04-lts-amd64-server-*"]
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
   }
 
   filter {
@@ -27,223 +27,177 @@ data "aws_ami" "ubuntu" {
   }
 }
 
-# # Create subnet
-# resource "aws_subnet" "public" {
-#   vpc_id                  = data.aws_vpc.existing.id
-#   cidr_block              = var.subnet_cidr
-#   availability_zone       = data.aws_availability_zones.available.names[0]
-#   map_public_ip_on_launch = true
 
-#   tags = {
-#     Name = "tesa-lab-Ridwan-public-subnet"
-#     Type = "Public"
-#   }
-# }
+# Create subnet
+resource "aws_subnet" "public" {
+  vpc_id                  = data.aws_vpc.existing.id
+  cidr_block              = var.subnet_cidr
+  availability_zone       = data.aws_availability_zones.available.names[0]
+  map_public_ip_on_launch = true
 
-# # Create route table for public subnet
-# resource "aws_route_table" "public" {
-#   vpc_id = data.aws_vpc.existing.id
+  tags = {
+    Name = "tesa-lab-Ridwan-public-subnet"
+    Type = "Public"
+  }
+}
 
-#   route {
-#     cidr_block = "0.0.0.0/0"
-#     gateway_id = data.aws_internet_gateway.existing.id
-#   }
+# Create route table for public subnet
+resource "aws_route_table" "public" {
+  vpc_id = data.aws_vpc.existing.id
 
-#   tags = {
-#     Name = "tesa-lab-Ridwan-public-rt"
-#   }
-# }
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = data.aws_internet_gateway.existing.id
+  }
 
-# # Associate route table with subnet
-# resource "aws_route_table_association" "public" {
-#   subnet_id      = aws_subnet.public.id
-#   route_table_id = aws_route_table.public.id
-# }
+  tags = {
+    Name = "tesa-lab-Ridwan-public-rt"
+  }
+}
 
-# # Security Group for web server
-# resource "aws_security_group" "web_server" {
-#   name        = "tesa-lab-Ridwan-web-server-sg"
-#   description = "Security group for Ridwan's web server"
-#   vpc_id      = data.aws_vpc.existing.id
+# Associate route table with subnet
+resource "aws_route_table_association" "public" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
+}
 
-#   ingress {
-#     description = "HTTP"
-#     from_port   = 80
-#     to_port     = 80
-#     protocol    = "tcp"
-#     cidr_blocks = ["0.0.0.0/0"]
-#   }
+# Security Group for web server
+resource "aws_security_group" "web_server" {
+  name        = "tesa-lab-Ridwan-web-server-sg"
+  description = "Security group for Ridwan web server"
+  vpc_id      = data.aws_vpc.existing.id
 
-#   ingress {
-#     description = "HTTPS"
-#     from_port   = 443
-#     to_port     = 443
-#     protocol    = "tcp"
-#     cidr_blocks = ["0.0.0.0/0"]
-#   }
+  ingress {
+    description = "HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-#   ingress {
-#     description = "SSH"
-#     from_port   = 22
-#     to_port     = 22
-#     protocol    = "tcp"
-#     cidr_blocks = ["0.0.0.0/0"]  # Restrict this to my IP for security
-#   }
+  ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-#   egress {
-#     from_port   = 0
-#     to_port     = 0
-#     protocol    = "-1"
-#     cidr_blocks = ["0.0.0.0/0"]
-#   }
+  ingress {
+    description = "SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["105.119.31.215/32"]  # Restrict this to my IP for security
+  }
 
-#   tags = {
-#     Name = "tesa-lab-Ridwan-web-server-sg"
-#   }
-# }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-# # Create EC2 key pair
-# resource "aws_key_pair" "web_server_key" {
-#   key_name   = var.key_pair_name
-#   public_key = var.public_key
-# }
+  tags = {
+    Name = "tesa-lab-Ridwan-web-server-sg"
+  }
+}
 
-# # IAM role for EC2 instance
-# resource "aws_iam_role" "ec2_role" {
-#   name = "tesa-lab-Ridwan-ec2-role"
+# Create EC2 key pair
+resource "aws_key_pair" "web_server_key" {
+  key_name   = var.key_pair_name
+  public_key = var.public_key
+}
 
-#   assume_role_policy = jsonencode({
-#     Version = "2012-10-17"
-#     Statement = [
-#       {
-#         Action = "sts:AssumeRole"
-#         Effect = "Allow"
-#         Principal = {
-#           Service = "ec2.amazonaws.com"
-#         }
-#       }
-#     ]
-#   })
-# }
+# User data script
+locals {
+  user_data = base64encode(<<-EOF
+#!/bin/bash
+apt-get update
+apt-get install -y nginx git awscli
 
-# # IAM policy for EC2 instance (for GitHub Actions deployment)
-# resource "aws_iam_role_policy" "ec2_policy" {
-#   name = "tesa-lab-Ridwan-ec2-policy"
-#   role = aws_iam_role.ec2_role.id
+# Configure nginx
+systemctl start nginx
+systemctl enable nginx
 
-#   policy = jsonencode({
-#     Version = "2012-10-17"
-#     Statement = [
-#       {
-#         Effect = "Allow"
-#         Action = [
-#           "s3:GetObject",
-#           "s3:PutObject",
-#           "s3:DeleteObject",
-#           "s3:ListBucket"
-#         ]
-#         Resource = "*"
-#       }
-#     ]
-#   })
-# }
+# Create web directory
+mkdir -p /var/www/html/website
+chown -R www-data:www-data /var/www/html/website
 
-# # IAM instance profile
-# resource "aws_iam_instance_profile" "ec2_profile" {
-#   name = "tesa-lab-Ridwan-ec2-profile"
-#   role = aws_iam_role.ec2_role.name
-# }
+# Create nginx configuration
+cat > /etc/nginx/sites-available/website << 'EOL'
+server {
+    listen 80;
+    server_name _;
+    root /var/www/html/website;
+    index index.html index.htm;
 
-# # User data script
-# locals {
-#   user_data = base64encode(<<-EOF
-# #!/bin/bash
-# apt-get update
-# apt-get install -y nginx git awscli
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+EOL
 
-# # Configure nginx
-# systemctl start nginx
-# systemctl enable nginx
+# Enable the site
+ln -s /etc/nginx/sites-available/website /etc/nginx/sites-enabled/
+rm /etc/nginx/sites-enabled/default
+systemctl reload nginx
 
-# # Create web directory
-# mkdir -p /var/www/html/website
-# chown -R www-data:www-data /var/www/html/website
+# Create initial index.html
+cat > /var/www/html/website/index.html << 'EOL'
+<!DOCTYPE html>
+<html>
+<head><title>Tesa Lab</title></head>
+<body><h1>Server Ready for Deployment</h1></body>
+</html>
+EOL
 
-# # Create nginx configuration
-# cat > /etc/nginx/sites-available/website << 'EOL'
-# server {
-#     listen 80;
-#     server_name _;
-#     root /var/www/html/website;
-#     index index.html index.htm;
+chown -R www-data:www-data /var/www/html/website
 
-#     location / {
-#         try_files $uri $uri/ =404;
-#     }
-# }
-# EOL
+# Setup deploy user
+useradd -m -s /bin/bash deploy
+usermod -aG www-data deploy
+mkdir -p /home/deploy/.ssh
+chown deploy:deploy /home/deploy/.ssh
+chmod 700 /home/deploy/.ssh
 
-# # Enable the site
-# ln -s /etc/nginx/sites-available/website /etc/nginx/sites-enabled/
-# rm /etc/nginx/sites-enabled/default
-# systemctl reload nginx
+# Allow deploy user to restart nginx
+echo "deploy ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload nginx" >> /etc/sudoers
+echo "deploy ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx" >> /etc/sudoers
+EOF
+  )
+}
 
-# # Create initial index.html
-# cat > /var/www/html/website/index.html << 'EOL'
-# <!DOCTYPE html>
-# <html>
-# <head><title>Tesa Lab</title></head>
-# <body><h1>Server Ready for Deployment</h1></body>
-# </html>
-# EOL
+# EC2 Instance
+resource "aws_instance" "web_server" {
+  ami                     = data.aws_ami.ubuntu.id
+  instance_type           = "t3.micro"
+  key_name               = aws_key_pair.web_server_key.key_name
+  vpc_security_group_ids = [aws_security_group.web_server.id]
+  subnet_id              = aws_subnet.public.id
+  user_data              = local.user_data
 
-# chown -R www-data:www-data /var/www/html/website
+  root_block_device {
+    volume_type = "gp3"
+    volume_size = 10
+    encrypted   = true
+  }
 
-# # Setup deploy user
-# useradd -m -s /bin/bash deploy
-# usermod -aG www-data deploy
-# mkdir -p /home/deploy/.ssh
-# chown deploy:deploy /home/deploy/.ssh
-# chmod 700 /home/deploy/.ssh
+  tags = {
+    Name = "tesa-lab-Ridwan-web-server"
+    Type = "WebServer"
+  }
+}
 
-# # Allow deploy user to restart nginx
-# echo "deploy ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload nginx" >> /etc/sudoers
-# echo "deploy ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx" >> /etc/sudoers
-# EOF
-#   )
-# }
+# Elastic IP for the instance
+resource "aws_eip" "web_server_eip" {
+  instance = aws_instance.web_server.id
+  domain   = "vpc"
 
-# # EC2 Instance
-# resource "aws_instance" "web_server" {
-#   ami                     = data.aws_ami.ubuntu.id
-#   instance_type           = "t3.micro"
-#   key_name               = aws_key_pair.web_server_key.key_name
-#   vpc_security_group_ids = [aws_security_group.web_server.id]
-#   subnet_id              = aws_subnet.public.id
-#   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
-#   user_data              = local.user_data
+  tags = {
+    Name = "tesa-lab-Ridwan-web-server-eip"
+  }
 
-#   root_block_device {
-#     volume_type = "gp3"
-#     volume_size = 10
-#     encrypted   = true
-#   }
-
-#   tags = {
-#     Name = "tesa-lab-Ridwan-web-server"
-#     Type = "WebServer"
-#   }
-# }
-
-# # Elastic IP for the instance
-# resource "aws_eip" "web_server_eip" {
-#   instance = aws_instance.web_server.id
-#   domain   = "vpc"
-
-#   tags = {
-#     Name = "tesa-lab-Ridwan-web-server-eip"
-#   }
-
-#   depends_on = [aws_internet_gateway.existing]
-# }
+  depends_on = [data.aws_internet_gateway.existing]
+}
 
